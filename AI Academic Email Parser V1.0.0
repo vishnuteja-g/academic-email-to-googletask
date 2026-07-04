@@ -1,0 +1,235 @@
+{
+  "name": "AI Academic Email Parser",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b706ee3d-cc65-4a0d-86e5-60f8e579095e",
+              "leftValue": "={{ ($json.Subject + \" \" + $json.snippet).toLowerCase() }}",
+              "rightValue": "=assignment|quiz|deadline|submission|exam|test|class test|lab|project|presentation|viva|evaluation|report|homework|attendance|internal|mid|final|practical|due|assessment|coding|worksheet|seminar|experiment|record",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -64,
+        -688
+      ],
+      "id": "e65a08a1-81a0-4131-8696-773d42539897",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.1-flash-lite",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3.1-flash-lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an AI academic assistant.\n\nYour job is to extract ONLY actionable academic tasks from an email.\n\nIgnore announcements, newsletters, event invitations, placement drives, achievements, greetings, timetable updates, and informational emails unless they require the student to perform an action.\n\nRules:\n\n- Return ONLY valid JSON.\n- Do not include markdown, explanations, or backticks.\n- Return exactly this JSON schema:\n{\n  \"taskTitle\": \"...\",\n  \"dueDate\": \"...\",\n  \"taskNote\": \"...\"\n}\n\n- If there is no actionable academic task, return:\n{\n  \"taskTitle\": null,\n  \"dueDate\": null,\n  \"taskNote\": null\n}\n\nTask Title Rules:\n- Maximum 8 words.\n- Start with an action verb whenever possible.\n- Be specific.\n- Never include the due date.\n- Never include filler words.\n\nExamples:\n\"Submit DBMS Assignment\"\n\"Prepare for AI Quiz\"\n\"Complete Lab Report\"\n\nTask Note Rules:\n- Maximum 20 words.\n- Clearly explain what needs to be done.\n- Do not repeat the title.\n- Do not include the due date.\n\nExamples:\n\"Upload the report on Moodle.\"\n\"Complete the lab report before submission.\"\n\"Study Chapters 3–5 for the quiz.\"\n\nDue Date Rules:\n- Return dates in ISO format (YYYY-MM-DD).\n- Convert relative dates (e.g. tomorrow, next Monday, Friday, within 3 days) into absolute dates whenever possible.\n- If no due date can be determined, return null.\n\nEmail Subject:\n{{ $json.subject }}\n\nEmail Body:\n{{ $json.text || $json.snippet }}"
+            }
+          ]
+        },
+        "simplify": "={{ true }}",
+        "jsonOutput": "={{ false }}",
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        320,
+        -1008
+      ],
+      "id": "8b00c749-47b1-4e3b-bf2b-75c9e747a97e",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "sTMMLmtMLoBGQPRU",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "task": "U0hSS09FY3JZQVpWMHJvUg",
+        "title": "={{ $json.taskTitle }}",
+        "additionalFields": {
+          "dueDate": "={{ $json.dueDate }}",
+          "notes": "={{ $json.taskNote }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleTasks",
+      "typeVersion": 1,
+      "position": [
+        912,
+        -608
+      ],
+      "id": "8ebab665-450b-4431-bebd-b16e6245acff",
+      "name": "Create Google Task",
+      "credentials": {
+        "googleTasksOAuth2Api": {
+          "id": "ysVTnzdwNGk39LY1",
+          "name": "Google Tasks account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n    const parts = $input.first().json.content.parts;\n    const response = parts[0].text;\n\n    const cleaned = response\n        .replace(/```json|```/g, \"\")\n        .trim();\n\n    const parsed = JSON.parse(cleaned);\n\n    return [{ json: parsed }];\n\n} catch (error) {\n\n    throw new Error(\"Gemini returned invalid JSON.\");\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -736
+      ],
+      "id": "9ddba449-6b5d-45de-a0cd-75484eb3053d",
+      "name": "Extract Tasks with Gemini"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -336,
+        -560
+      ],
+      "id": "b4ffe71f-8b70-4ad0-95de-3202b8b2359f",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "rKsfyoePqnd74uKP",
+          "name": "Student Mail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $json.id }}",
+        "simple": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        144,
+        -848
+      ],
+      "id": "23fd6a18-80dd-4237-87dd-880ba529c7fb",
+      "name": "Get a message",
+      "webhookId": "575c2298-2489-4f3c-80d3-22b2a2296159",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "rKsfyoePqnd74uKP",
+          "name": "Student Mail"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Get a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Extract Tasks with Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Google Task": {
+      "main": [
+        []
+      ]
+    },
+    "Extract Tasks with Gemini": {
+      "main": [
+        [
+          {
+            "node": "Create Google Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a message": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "6217a762-1f28-4fc5-8b73-864854d05ba0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fefe4dbcf6db01a0b7647bb966a4e08fccf7e2af9fbe39b4ab4459bd66bb67c1"
+  },
+  "id": "kJcdPTuuvi0iFSr4",
+  "tags": []
+}
